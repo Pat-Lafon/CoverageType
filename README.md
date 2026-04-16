@@ -90,7 +90,7 @@ to run a subtyping check. In case of a failed query, a Rocq file will be written
 cd ../rocqconv
 dune exec ./bin/main.exe
 ```
-(currently, it only prints the translated axioms to `stdout`; eventually, they can hopefully automatically be outputted to a file as well).
+(currently, the translated axioms are by default emitted to `/tmp/axioms.ml`).
 
 ### Customizing axioms / definitions
 Currently, the files which CoverageType pulls axioms, type definitions, and refinement type definitions from are hard-coded in `./preprocess/preprocess.ml`; to customize axioms or typedefs these files can be overridden, or `preprocess.ml` can be edited to point to different files.
