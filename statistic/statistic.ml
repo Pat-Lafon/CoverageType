@@ -57,7 +57,10 @@ let stat_total_time (name, total_time) =
 let calculate_stat stat =
   (* let num_query = List.length stat.query_times in *)
   (* let query_time = List.fold_left ( +. ) 0.0 stat.query_times in *)
-  let avg_time = stat.total_time /. float_of_int stat.num_query in
+  let avg_time =
+    if stat.num_query = 0 then 0.
+    else stat.total_time /. float_of_int stat.num_query
+  in
   let mp = List.length stat.method_prdicates in
   { stat with avg_time; mp }
 
