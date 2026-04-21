@@ -1,0 +1,26 @@
+{
+    "axioms": [
+        "Axiom tree_complete_leaf : forall (l : tree Z), leaf l -> complete l.",
+        "Axiom tree_leaf_depth_0_alt : forall (l : tree Z), (leaf l) -> (depth l 0)."
+    ],
+    "axiom_proofs": [[
+        "Lemma tree_complete_leaf : forall (l : tree Z), leaf l -> complete l.",
+        "Proof.",
+        "  intros [] Hl.",
+        "  - reflexivity.",
+        "  - contradiction.",
+        "Qed."
+    ], [
+        "Lemma tree_leaf_depth_0_alt : forall (l : tree Z), (leaf l) -> (depth l 0).",
+        "Proof.",
+        "  intros [] Hl.",
+        "  - reflexivity.",
+        "  - contradiction.",
+        "Qed."
+    ]],
+    "proof": [
+        "intros v Hl. intuition.",
+        "- apply tree_leaf_depth_0_alt. assumption.",
+        "- apply tree_complete_leaf. assumption."
+    ]
+}

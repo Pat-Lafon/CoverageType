@@ -1,0 +1,78 @@
+From Stdlib Require Import BinInt.
+From Stdlib Require Import String.
+From Stdlib Require Import Ascii.
+From Stdlib Require Import Floats.
+From Stdlib Require Import Lia.
+Open Scope Z_scope.
+
+Module Type Signatures.
+  Parameter tree : forall (a : Type), Type.
+  Parameter rbtree : forall (a : Type), Type.
+
+  Parameter len : forall {a : Type}, list a -> Z -> Prop.
+  Parameter emp : forall {a : Type}, list a -> Prop.
+  Parameter hd : forall {a : Type}, list a -> a -> Prop.
+  Parameter tl : forall {a : Type}, list a -> list a -> Prop.
+  Parameter list_mem : forall {a : Type}, list a -> a -> Prop.
+
+
+  Axiom list_len_0_emp_iff : forall (l : list Z), emp l <-> len l 0.
+End Signatures.
+
+Module Axioms : Signatures.
+  Inductive tree' (a : Type) : Type :=
+  | Leaf : tree' a
+  | Node : a -> tree' a -> tree' a -> tree' a.
+  Definition tree := tree'.
+  Inductive rbtree' (a : Type) : Type :=
+  | Rbtleaf : rbtree' a
+  | Rbtnode : bool -> rbtree' a -> a -> rbtree' a -> rbtree' a.
+  Definition rbtree := rbtree'.
+
+  Fixpoint len {a : Type} (l : list a) (n : Z) : Prop :=
+    match l with
+    | nil => n = 0
+    | cons _ xs => n > 0 /\ len xs (n - 1)
+    end.
+  Definition emp {a : Type} (l : list a) : Prop :=
+    match l with
+    | nil => True
+    | cons _ _ => False
+    end.
+  Definition hd {a : Type} (l : list a) (n : a) : Prop :=
+    match l with
+    | nil => False
+    | cons n' _ => n = n'
+    end.
+  Definition tl {a : Type} (l : list a) (xs : list a) : Prop :=
+    match l with
+    | nil => False
+    | cons _ xs' => xs = xs'
+    end.
+  Fixpoint list_mem {a : Type} (l : list a) (x : a) : Prop :=
+    match l with
+    | nil => False
+    | cons x' xs => (x = x') \/ list_mem xs x
+    end.
+
+
+  Lemma list_len_0_emp_iff : forall (l : list Z), emp l <-> len l 0.
+  Proof.
+  intros [| x]; split.
+    - reflexivity.
+    - reflexivity.
+    - contradiction.
+    - simpl. intuition.
+  Qed.
+End Axioms.
+
+Module Goal.
+  Import Axioms.
+
+  Theorem goal : forall (v : list Z), emp v -> (emp v /\ len v 0).
+  Proof.
+    intros v He.
+    destruct (list_len_0_emp_iff v).
+    intuition.
+  Qed.
+End Goal.
