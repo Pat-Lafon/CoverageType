@@ -1,0 +1,60 @@
+{
+    "axioms": [
+        "Axiom tree_lower_bound_root : forall (l : tree Z) (x : Z) (y : Z), (bst l /\\ root l x /\\ lower_bound l y) -> (y < x).",
+        "Axiom tree_upper_bound_root : forall (l : tree Z) (x : Z) (y : Z), (bst l /\\ root l x /\\ upper_bound l y) -> (y > x)."
+    ],
+    "axiom_proofs": [[
+        "Lemma tree_lower_bound_root : forall (l : tree Z) (x : Z) (y : Z),",
+        "  (bst l /\\ root l x /\\ lower_bound l y) -> (y < x).",
+        "Proof.",
+        "  intros [] x y [Hb [Hr Hlb]]; try contradiction.",
+        "  simpl in *. subst.",
+        "  destruct Hlb. assumption.",
+        "Qed."
+    ], [
+        "Lemma tree_upper_bound_root : forall (l : tree Z) (x : Z) (y : Z),",
+        "  (bst l /\\ root l x /\\ upper_bound l y) -> (y > x).",
+        "Proof.",
+        "  intros [] x y [Hb [Hr Hub]]; try contradiction.",
+        "  simpl in *. subst.",
+        "  destruct Hub. lia.",
+        "Qed."
+    ]],
+    "proof": [
+        "intros d Hd lo hi Hlh v [Hd1 [Hlb [Hub [Hbst [Hnl [n2 [Hdpt Hn2]]]]]]].",
+        "destruct (tree_no_leaf_exists_lch v) as [l Hl].",
+        "destruct (tree_no_leaf_exists_rch v) as [r Hr].",
+        "destruct (tree_no_leaf_exists_root v) as [x Hrt].",
+        "destruct (tree_depth_exists l) as [nl Hnl1].",
+        "destruct (tree_depth_exists r) as [nr Hnr1].",
+        "destruct (tree_depth_node v l r nl nr). { intuition. }",
+        "assert (hi > x) by (apply (tree_upper_bound_root v); intuition).",
+        "assert (lo < x) by (apply (tree_lower_bound_root v); intuition).",
+        "intuition.",
+        "exists l. exists r. exists (d - 1). exists x.",
+        "intuition.",
+        "- apply (tree_lower_bound_destruct v). intuition.",
+        "- apply (tree_upper_bound_destruct_2 v). intuition.",
+        "- apply (tree_bst_lch_bst v). intuition.",
+        "- exists nl. intuition.",
+        "  destruct (nl >? nr) eqn:Hge.",
+        "  + assert (nl > nr) by lia. intuition.",
+        "    replace n2 with (nl + 1) in Hn2 by (apply (tree_depth_unique v); intuition).",
+        "    lia.",
+        "  + assert (nr >= nl) by lia. intuition.",
+        "    replace n2 with (nr + 1) in Hn2 by (apply (tree_depth_unique v); intuition).",
+        "    lia.",
+        "- apply (tree_lower_bound_destruct_2 v). intuition.",
+        "- apply (tree_upper_bound_destruct v). intuition.",
+        "- apply (tree_bst_rch_bst v). intuition.",
+        "- exists nr. intuition.",
+        "  destruct (nl >? nr) eqn:Hge.",
+        "  + assert (nl > nr) by lia. intuition.",
+        "    replace n2 with (nl + 1) in Hn2 by (apply (tree_depth_unique v); intuition).",
+        "    lia.",
+        "  + assert (nr >= nl) by lia. intuition.",
+        "    replace n2 with (nr + 1) in Hn2 by (apply (tree_depth_unique v); intuition).",
+        "    lia.",
+        "- exists nl. exists nr. intuition."
+    ]
+}

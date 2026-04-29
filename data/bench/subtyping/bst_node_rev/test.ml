@@ -24,7 +24,7 @@ let[@assert] rty1 =
       && ((not (leaf rt))#==>(lower_bound rt x))
       && ((not (leaf rt))#==>(upper_bound rt hi))
       && bst rt
-      && (fun ((n [@exists]) : int) -> depth rt n && n <= d_2 )
+      && (fun ((n1 [@exists]) : int) -> depth rt n1 && n1 <= d_2 )
       && root v x && lch v lt && rch v rt
       && fun ((nl [@exists]) : int) ((nr [@exists]) : int) ->
       depth lt nl && depth rt nr
@@ -42,6 +42,6 @@ let[@assert] rty2 =
     && ((not (leaf v))#==>(upper_bound v hi))
     && bst v
     && (not (leaf v))
-    && fun ((n [@exists]) : int) -> depth v n && n <= d
+    && fun ((n2 [@exists]) : int) -> depth v n2 && n2 <= d
     : [%v: int tree])
     [@under])
