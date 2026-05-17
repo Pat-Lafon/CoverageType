@@ -24,9 +24,8 @@ let subtype_check source_file () =
       (fun () -> Typectx.pprint_ctx layout_rty Typectx.emp)
       (rty1, rty2) ()
   in
-  let basic_ctx = Preprocess.load_basic_ctx () in
-  let () = Prover.register_type_ctx basic_ctx in
-  (* let () = Statistic.create_stat "subtyping" imp in *)
+  let _ = Preprocess.load_bctx () in
+  let () = Statistic.create_subtyping_stat () in
   let res =
     Auxtyping.sub_rty (Typing.Rctx.emp "subtyping" [] []) (rty1, rty2)
   in
