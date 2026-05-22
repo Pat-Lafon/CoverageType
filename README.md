@@ -139,3 +139,19 @@ For the simplest use case, adding to the latter two maps is optional;
 - an axiom whose proof was not found in `built_in_proofs` will simply be `Admitted`
 
 but populating the maps may help with proving new axioms in the `Axioms` module.
+
+# Testing
+
+Currently, the testing suite is split into four groups:
+  - `test/fast`, which are non-flaky tests that run relatively fast
+  - `test/slow`, which are non-flaky tests that run a bit slow (>1s locally for me)
+  - `test/flaky`, which are flaky tests which may or may not pass,
+    depending on the exact local configuration
+  - `test/monad`, which are the tests using some of the parametric and monadic features.
+    Currently, they are not working, so they have been kept in a separate file for now.
+
+Running `dune test test/fast -w` in a separate test window while developing
+will run each test on any file change, which makes it easier to ensure that 
+each change preserves the prior behavior of the type checker. The CI runs
+`dune test test/fast test/slow`, which runs both the fast and slow test sets.
+By default, the testing framework only shows the tests which failed.
