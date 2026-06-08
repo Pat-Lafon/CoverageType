@@ -12,7 +12,6 @@
   to_judgement
   ; to_axiom
   to_item
-  reflect
   lean_export
   frontend_opt
  )
