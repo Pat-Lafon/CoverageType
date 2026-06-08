@@ -13,18 +13,68 @@ let multi_parse files = List.concat_map parse files
 let _ctxs = ref None
 let _log = Myconfig._log_preprocess
 
+(* Populate [Dtencoding.decl_registry]; [Prover._mk_prover] reads it at Z3 ctx creation.
+   Skip non-uninterp names ([bool]/[option]/[int]/...) — handled by existing
+   [smt_tp_to_sort] arms. Reject [CtorTuple] because synthesized positional
+   accessors (e.g. [cons_0]) wouldn't match the axiom op names ([head]/[tail])
+   that subtyping queries emit. *)
+let collect_dt_decls items =
+  let module D = Prop.Dtencoding in
+  let ctor_of_decl type_name { constr_name; args } =
+    let fields =
+      match args with
+      | CtorTuple [] -> []
+      | CtorRecord xs ->
+          List.map (fun x -> D.{ fname = x.x; ftype = x.ty }) xs
+      | CtorTuple (_ :: _) ->
+          Sugar._die_with [%here]
+            (Printf.sprintf
+               "Dtencoding: positional constructor `%s` in type `%s` is not \
+                supported; use record syntax `{ field : type; ... }`"
+               constr_name type_name)
+    in
+    D.{ cname = String.lowercase_ascii constr_name; fields }
+  in
+  let dt_decl_of_item = function
+    | MTyDecl { type_name; type_decl = Decl_constructors decls; _ } ->
+        if Nt.(is_uninterp (to_smtty (Ty_constructor (type_name, [])))) then
+          let ctors = List.map (ctor_of_decl type_name) decls in
+          Some D.{ dt_name = type_name; ctors }
+        else None (* builtin smtty name like [unit]/[bool] — handled by [smt_tp_to_sort] *)
+    | MTyDecl { type_decl = Decl_record _; _ } -> None (* record type, not a sum ADT *)
+    | MValDecl _ | MMethodPred _ | MAxiom _ | MFuncImpRaw _ | MFuncImp _
+    | MRty _ | MLocalRty _ ->
+        None (* non-type items *)
+  in
+  List.iter D.register_decl (List.filter_map dt_decl_of_item items)
+
 let predefined_files =
-  [ "basic_typing.ml"; "refinement_typing.ml"; "axioms.ml" ]
+  [ "basic_typing.ml"; "refinement_typing.ml"; "wf_decreasing_axioms.ml" ]
+
+let resolve_files (prim_path : MyconfigAst.preload_path) : string list =
+  match
+    ( prim_path.data_type_decls,
+      prim_path.normal_typing,
+      prim_path.coverage_typing,
+      prim_path.axioms )
+  with
+  | Some dt, Some nt, Some ct, Some ax -> [ dt; nt; ct; ax ]
+  | None, None, None, None ->
+      List.map (spf "%s/%s" prim_path.predefined_path) predefined_files
+  | _ ->
+      failwith
+        "prim_path: per-test fields (data_type_decls, normal_typing, \
+         coverage_typing, axioms) must be all present or all absent; mixed \
+         shapes are not supported"
 
 let load_ctxs () =
   match !_ctxs with
   | Some ctxs -> ctxs
   | None ->
       let prim_path = Myconfig.get_prim_path () in
-      let files =
-        List.map (spf "%s/%s" prim_path.predefined_path) predefined_files
-      in
+      let files = resolve_files prim_path in
       let items = multi_parse files in
+      let () = collect_dt_decls items in
       let alias = Type_alias.item_mk_type_alias_ctx items in
       let items = Type_alias.item_inline alias items in
       let basic_ctx, items = struct_check Typectx.emp items in

@@ -41,7 +41,13 @@ let check_valid (task, query) =
     Printf.printf "check valid: %s\n" (layout_prop_ query)
   in
   let () = report_unclosed [%here] query in
-  Prover.check_valid (task, query)
+  let axioms = Prover.select_axioms (task, query) in
+  let always_dump = Option.is_some (Sys.getenv_opt "TOTEM_DUMP_LEAN") in
+  if always_dump then Lean_dump.dump_failed_query axioms query;
+  let result = Prover.check_valid ~axioms (task, query) in
+  if (not result) && not always_dump then
+    Lean_dump.dump_failed_query axioms query;
+  result
 
 let simplify_sub_typectx ctx (rty1, rty2) =
   let ctx = Typectx.ctx_to_list ctx in
@@ -68,6 +74,8 @@ let simplify_sub_typectx ctx (rty1, rty2) =
 
 let sub_cty ou rctx cty1 cty2 =
   let ctx_list, cty1, cty2 = simplify_sub_typectx rctx.rty_ctx (cty1, cty2) in
+  let cty1 = { cty1 with phi = fresh_name_prop cty1.phi } in
+  let cty2 = { cty2 with phi = fresh_name_prop cty2.phi } in
   let () =
     _log_auxtyping @@ fun _ ->
     Printf.printf "ctx_list: %s\n" (List.split_by_comma _get_x ctx_list)
@@ -119,7 +127,8 @@ let sub_cty ou rctx cty1 cty2 =
           prop
     | Under ->
         let rhs = List.fold_right smart_dependent_exists underctx cty1.phi in
-        let prop = smart_implies cty2.phi rhs in
+        let lhs = List.fold_right smart_dependent_exists underctx cty2.phi in
+        let prop = smart_implies lhs rhs in
         List.fold_right smart_dependent_forall
           (overctx @ [ (default_v, mk_top_cty cty2.nty) ])
           prop
@@ -155,6 +164,7 @@ let lazy_emptiness_check = false
 let non_emptiness_cty rctx cty =
   if lazy_emptiness_check then true
   else
+    let cty = { cty with phi = fresh_name_prop cty.phi } in
     let overctx, underctx = build_wf_ctx (Typectx.ctx_to_list rctx.rty_ctx) in
     let underctx = underctx @ [ (default_v, mk_top_cty cty.nty) ] in
     let () =
@@ -189,7 +199,8 @@ let non_emptiness_cty rctx cty =
             _log_auxtyping @@ fun _ ->
             Printf.printf "let[@axiom] tmp = %s\n" (layout_prop__raw query)
           in
-          Prover.check_sat (Some rctx.task_name, query))
+          let axioms = Prover.select_axioms (Some rctx.task_name, query) in
+          Prover.check_sat ~axioms (Some rctx.task_name, query))
     in
     let () = Statistic.stat_query_time (rctx.task_name, time) in
     let res =

@@ -2,11 +2,14 @@
  (public_name CoverageType.typing)
  (name typing)
  (wrapped true)
- (libraries core zutils language auxtyping statistic)
+ (libraries core zutils language auxtyping statistic inference)
  (modules
    common
    handlePred
    bidirect
+   termcheck
+   infer_prop
+   termsyn
    itemcheck
    typing
  )
