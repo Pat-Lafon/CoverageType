@@ -7,6 +7,12 @@ open Auxtyping
 let _log = Myconfig._log_typing
 let _decreasing = "decreasing"
 
+exception RecArgCheckFailure
+
+let _cur_rec_func_name : (string * Nt.t cty * Nt.t) option ref = ref None
+let init_cur_rec_func_name v = _cur_rec_func_name := Some v
+let get_cur_rec_func_name () = !_cur_rec_func_name
+
 let mk_self_wf_dec x =
   let open Prop in
   let lt = if Nt.equal_nt x.ty Nt.int_ty then "<" else _decreasing in

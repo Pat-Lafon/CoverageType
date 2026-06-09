@@ -296,6 +296,20 @@ let type_check_group (bctx : built_in_ctx) =
                 instantiate_poly_pred_rty rctx.pred_ctx appf.ty apparg'.ty
               in
               let rctx' = Rctx.add_preds rctx poly_preds in
+              (* Rec-arg soundness: at the fix's own call site, apparg must
+                 lie within the well-foundedness bound from _cur_rec_func_name.
+                 RecArgCheckFailure is caught at the enumeration boundary. *)
+              let () =
+                match (get_cur_rec_func_name (), appf.x) with
+                | Some (recname, argcty, _), VVar id
+                  when String.equal id.x recname ->
+                    let rec_arg_rty = RtyBase { ou = Under; cty = argcty } in
+                    if not (subtyping rctx' (rec_arg_rty, apparg_rty)) then (
+                      _warinning_subtyping_error [%here]
+                        (rec_arg_rty, apparg_rty);
+                      raise RecArgCheckFailure)
+                | _ -> ()
+              in
               (* let () = Printf.printf "appf_ty : %s\n" (layout_rty appf_ty) in *)
               let* retty =
                 if is_over_arr_rty appf_ty then
