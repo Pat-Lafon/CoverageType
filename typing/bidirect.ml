@@ -11,7 +11,7 @@ let value_infer_mode = PolyPredParam
 
 let type_check_group (bctx : built_in_ctx) =
   let _find_in_ctx loc (rctx : rctx) (id : (Nt.t, string) typed) =
-    let res = lookup_ctxs [ rctx.rty_ctx; bctx.builtin_ctx ] id.x in
+    let res = lookup_id rctx bctx id.x in
     match res with
     | Some res ->
         let rty = fresh_name_rty res in
@@ -296,6 +296,21 @@ let type_check_group (bctx : built_in_ctx) =
                 instantiate_poly_pred_rty rctx.pred_ctx appf.ty apparg'.ty
               in
               let rctx' = Rctx.add_preds rctx poly_preds in
+              (* Rec-arg soundness: at the fix's own call site, apparg must
+                 lie within the well-foundedness bound from _cur_rec_func_name.
+                 RecArgCheckFailure collapses to [None] in Termcheck's entry
+                 points, so every caller sees "does not type-check". *)
+              let () =
+                match (get_cur_rec_func_name (), appf.x) with
+                | Some (recname, argcty, _), VVar id
+                  when String.equal id.x recname ->
+                    let rec_arg_rty = RtyBase { ou = Under; cty = argcty } in
+                    if not (subtyping rctx' (rec_arg_rty, apparg_rty)) then (
+                      _warinning_subtyping_error [%here]
+                        (rec_arg_rty, apparg_rty);
+                      raise RecArgCheckFailure)
+                | _ -> ()
+              in
               (* let () = Printf.printf "appf_ty : %s\n" (layout_rty appf_ty) in *)
               let* retty =
                 if is_over_arr_rty appf_ty then
@@ -449,10 +464,16 @@ let type_check_group (bctx : built_in_ctx) =
           (CMatchcase
              { constructor = constructor.x#:constructor_rty; args; exp = exp' })
   in
-  (value_type_check, term_type_check)
-
-let value_type_check bctx ctx (value, rty) =
-  (fst @@ type_check_group bctx) ctx value rty
+  (term_type_check, term_type_infer, value_type_infer)
 
 let term_type_check bctx ctx (value, rty) =
-  (snd @@ type_check_group bctx) ctx value rty
+  let f, _, _ = type_check_group bctx in
+  f ctx value rty
+
+let term_type_infer bctx ctx e =
+  let _, f, _ = type_check_group bctx in
+  f ctx e
+
+let value_type_infer bctx ctx v =
+  let _, _, f = type_check_group bctx in
+  f ctx v
