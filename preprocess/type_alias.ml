@@ -68,10 +68,14 @@ let item_inline decls items =
   let f e =
     match e with
     | MTyDecl { type_name; type_params; type_decl = Decl_constructors decls } ->
+        let inline_args = function
+          | CtorTuple xs -> CtorTuple (List.map (fun x -> x#=>inline) xs)
+          | CtorRecord xs -> CtorRecord (List.map (fun x -> x#=>inline) xs)
+        in
         let decls =
           List.map
-            (fun { constr_name; argsty } ->
-              { constr_name; argsty = List.map inline argsty })
+            (fun { constr_name; args } ->
+              { constr_name; args = inline_args args })
             decls
         in
         let res =
@@ -89,8 +93,8 @@ let item_inline decls items =
         Some res
     | MValDecl x -> Some (MValDecl x#=>inline)
     | MMethodPred x -> Some (MMethodPred x#=>inline)
-    | MAxiom { name; tasks; prop } ->
-        Some (MAxiom { name; tasks; prop = map_prop inline prop })
+    | MAxiom { name; prop } ->
+        Some (MAxiom { name; prop = map_prop inline prop })
     | MLocalRty { host_name; name; rty; captured } ->
         let rty = map_rty inline rty in
         Some (MLocalRty { host_name; name; rty; captured })
@@ -107,7 +111,7 @@ let item_inline decls items =
 
 (* let%test "inline_alias" = *)
 (*   let () = *)
-(*     Myconfig.meta_config_path := *)
+(*     ZUtilsConfig.meta_config_path := *)
 (*       "/Users/zhezzhou/workspace/CoverageType/meta-config.json" *)
 (*   in *)
 (*   let test_file = *)

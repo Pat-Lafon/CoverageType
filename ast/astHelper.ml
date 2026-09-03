@@ -90,22 +90,20 @@ let is_free_rty x rty = List.exists (String.equal x) @@ fv_rty_id rty
 let is_close_rty dom rty =
   List.for_all (fun x -> List.exists (String.equal x) dom) @@ fv_rty_id rty
 
-let rec check_syntactically_wf_rty = function
-  | RtyBase _ -> ()
-  | RtyArr { argrty; arg; retty } -> (
-      match argrty with
-      | RtyBase { ou = Over; _ } -> check_syntactically_wf_rty retty
-      | RtyArr _ as funcrty ->
-          _assert [%here]
-            "rty not well-formed: function arg cannot be free in return type"
-            (not (is_free_rty arg retty));
-          check_syntactically_wf_rty funcrty;
-          check_syntactically_wf_rty retty
-      | _ ->
-          _die_with [%here]
-            "rty not well-formed: function arg must be over or arrow type")
-  | RtyPolyType { rty; _ } -> check_syntactically_wf_rty rty
-  | RtyPolyPred { rty; _ } -> check_syntactically_wf_rty rty
+let check_syntactically_wf_rty (tau : 't rty) =
+  let rec aux tau =
+    match tau with
+    | RtyBase _ -> ()
+    | RtyArr { argrty; arg; retty } -> (
+        match argrty with
+        | RtyBase { ou = Over; _ } -> ()
+        | _ ->
+            if is_free_rty arg retty then
+              _die_with [%here] "Rty is not well-formed")
+    | RtyPolyType { rty; _ } -> aux rty
+    | RtyPolyPred { rty; _ } -> aux rty
+  in
+  aux tau
 
 let constant_to_value c = (VConst c)#:(Prop.constant_to_nt c)
 let value_to_term v = (CVal v)#:v.ty
@@ -413,26 +411,23 @@ open Typectx
 let rty_add_to_right { builtin_ctx; cur_axiom_names } x =
   { builtin_ctx = add_to_right builtin_ctx x; cur_axiom_names }
 
-let axiom_add_to_right { builtin_ctx; cur_axiom_names } (x, tasks, prop) =
+let axiom_add_to_right { builtin_ctx; cur_axiom_names } (x, prop) =
   if List.exists (String.equal x) cur_axiom_names then _die [%here]
   else
-    let () = Prop.Prover.update_axioms [ (x, tasks, prop) ] in
+    let () = Prop.Prover.update_axioms [ (x, prop) ] in
     { builtin_ctx; cur_axiom_names = cur_axiom_names @ [ x ] }
 
 let rty_add_to_rights { builtin_ctx; cur_axiom_names } x =
   { builtin_ctx = add_to_rights builtin_ctx x; cur_axiom_names }
 
 let axiom_add_to_rights { builtin_ctx; cur_axiom_names } xs =
-  if
-    List.exists
-      (fun (x, _, _) -> List.exists (String.equal x) cur_axiom_names)
-      xs
+  if List.exists (fun (x, _) -> List.exists (String.equal x) cur_axiom_names) xs
   then _die [%here]
   else
     let () = Prop.Prover.update_axioms xs in
     {
       builtin_ctx;
-      cur_axiom_names = cur_axiom_names @ List.map (fun (x, _, _) -> x) xs;
+      cur_axiom_names = cur_axiom_names @ List.map (fun (x, _) -> x) xs;
     }
 
 (** Monad *)
@@ -476,17 +471,17 @@ let rec fresh_name_rty rty =
       RtyBase { ou; cty = { nty; phi = fresh_name_prop phi } }
   | RtyArr { argrty; arg; retty } ->
       let argrty = fresh_name_rty argrty in
-      let arg' = Rename.unique_var arg in
+      let arg' = Rename.unique arg in
       let retty =
         subst_rty_instance arg (AVar arg'#:(erase_rty argrty)) retty
       in
       RtyArr { argrty; arg = arg'; retty = fresh_name_rty retty }
   | RtyPolyType { pt; rty } ->
-      let pt' = Rename.unique_type_var pt in
+      let pt' = Rename.unique pt in
       let rty = map_rty (Nt.subst_nt (pt, Nt.Ty_var pt')) rty in
       RtyPolyType { pt = pt'; rty = fresh_name_rty rty }
   | RtyPolyPred { pred; rty } ->
-      let pred' = pred#->Rename.unique_var in
+      let pred' = pred#->Rename.unique in
       let rty = rename_pred_rty pred.x pred'.x rty in
       RtyPolyPred { pred = pred'; rty = fresh_name_rty rty }
 

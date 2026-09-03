@@ -2,8 +2,16 @@
  (public_name CoverageType.auxtyping)
  (name auxtyping)
  (wrapped true)
- (libraries core zutils language statistic CoverageType.typechecker_config)
- (modules subcty subrty tyfunc wellfound auxtyping)
+ (libraries
+  core
+  zutils
+  language
+  statistic
+  CoverageType.typechecker_config
+  CoverageType.preprocess
+  CoverageType.measure
+  CoverageType.recdef_z3)
+ (modules subcty subrty tyfunc wellfound emit auxtyping)
  (preprocess
   (pps
    ppx_optcomp
