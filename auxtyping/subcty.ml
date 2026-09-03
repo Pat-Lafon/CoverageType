@@ -33,13 +33,13 @@ let report_unclosed loc query =
           fvs))
     (0 == List.length fvs)
 
-let check_valid (task, query) =
+let check_valid query =
   let () =
     ZUtilsLog.debug @@ fun _ ->
     Printf.printf "check valid: %s\n" (layout_prop_ query)
   in
   let () = report_unclosed [%here] query in
-  Prover.check_valid (task, query)
+  Prover.check_valid query
 
 let simplify_sub_typectx ctx (rty1, rty2) =
   let ctx = Typectx.ctx_to_list ctx in
@@ -139,7 +139,7 @@ let sub_cty ou rctx cty1 cty2 =
           TypecheckerLog.auxtyping @@ fun _ ->
           Printf.printf "let[@axiom] tmp = %s\n" (layout_prop__raw query)
         in
-        check_valid (Some rctx.task_name, query))
+        check_valid query)
   in
   let () = Statistic.stat_query_time (rctx.task_name, time) in
   (* let () = if not res then _die [%here] in *)
@@ -187,7 +187,7 @@ let non_emptiness_cty rctx cty =
             TypecheckerLog.auxtyping @@ fun _ ->
             Printf.printf "let[@axiom] tmp = %s\n" (layout_prop__raw query)
           in
-          Prover.check_sat (Some rctx.task_name, query))
+          Prover.check_sat query)
     in
     let () = Statistic.stat_query_time (rctx.task_name, time) in
     let res =
