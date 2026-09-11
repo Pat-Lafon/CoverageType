@@ -6,6 +6,12 @@ open Auxtyping
 
 let _decreasing = "decreasing"
 
+exception RecArgCheckFailure
+
+let _cur_rec_func_name : (string * Nt.t cty * Nt.t) option ref = ref None
+let init_cur_rec_func_name v = _cur_rec_func_name := Some v
+let get_cur_rec_func_name () = !_cur_rec_func_name
+
 let mk_self_wf_dec x =
   let open Prop in
   let lt = if Nt.equal_nt x.ty Nt.int_ty then "<" else _decreasing in
@@ -157,5 +163,8 @@ let rec lookup_ctxs ctxs id =
       match get_opt ctx id with
       | Some res -> Some res
       | None -> lookup_ctxs ctxs id)
+
+let lookup_id (rctx : rctx) (bctx : built_in_ctx) id =
+  lookup_ctxs [ rctx.rty_ctx; bctx.builtin_ctx ] id
 
 (** Debug *)
