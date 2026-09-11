@@ -18,7 +18,6 @@ let subtype_check source_file () =
   let code = Preprocess.preprocess [ source_file ] in
   let _, rty1 = get_rty_by_name code "rty1" in
   let _, rty2 = get_rty_by_name code "rty2" in
-  let ctx = Typectx.emp in
   let _ =
     pprint_subtyping
       (fun () -> Typectx.pprint_ctx layout_rty Typectx.emp)
@@ -29,14 +28,22 @@ let subtype_check source_file () =
   let res =
     Auxtyping.sub_rty (Typing.Rctx.emp "subtyping" [] []) (rty1, rty2)
   in
-  Pp.printf "@{<bold>result: %b:@}\n" res
+  Pp.printf "@{<bold>Result: %b@}\n" res;
+  Stdlib.exit (if res then 0 else 1)
 
 let type_check source_file () =
   let code = Preprocess.preprocess [ source_file ] in
   let () = Pp.printf "@{<bold>result:@} %s\n" (layout_structure code) in
-  (* let () = _die [%here] in *)
-  let _ = Typing.struc_check (Preprocess.load_bctx ()) code in
-  ()
+  let bctx = Preprocess.load_bctx () in
+  let results = Typing.struc_check bctx code in
+  let failed = List.filter results ~f:(fun (_, ok) -> not ok) in
+  let () =
+    List.iter failed ~f:(fun (name, _) ->
+        Pp.printf "@{<bold>FAILED:@} %s\n" name)
+  in
+  let ok = List.is_empty failed in
+  Pp.printf "@{<bold>Result: %b@}\n" ok;
+  Stdlib.exit (if ok then 0 else 1)
 
 let one_param_file message f =
   let cmd =
