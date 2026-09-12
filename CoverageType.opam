@@ -42,5 +42,5 @@ build: [
 ]
 dev-repo: "git+https://github.com/username/reponame.git"
 pin-depends: [
-  ["zutils.dev" "git+https://github.com/OCamlRefinementType/zutils.git#c664146e9c0b76a9db9ec42e9c16b9c6b3c1cbf4"]
+  ["zutils.dev" "git+https://github.com/OCamlRefinementType/zutils.git#7d11f32af51e6d19d387e623edfd19f4df191662"]
 ]
