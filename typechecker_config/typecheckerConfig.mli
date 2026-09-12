@@ -10,6 +10,7 @@ type t = {
   log_tags : string list;
   lean_preamble : string option;
   coq_preamble : string option;
+  emit_backend : string option;
 }
 
 (* Populates the zutils + typechecker sections. *)
@@ -18,3 +19,4 @@ val get : unit -> t
 val get_log_tags : unit -> string list
 val get_lean_preamble_path : unit -> string option
 val get_coq_preamble_path : unit -> string option
+val get_emit_backend : unit -> [ `Lean | `Coq ]
