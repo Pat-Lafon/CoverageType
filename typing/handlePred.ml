@@ -208,7 +208,7 @@ let instantiate_poly_pred_rty predctx frty xty =
       (fun m pred ->
         match Typectx.get_opt predctx pred.x with
         | None -> m
-        | Some _ -> (pred.x, Rename.unique_var pred.x) :: m)
+        | Some _ -> (pred.x, Rename.unique pred.x) :: m)
       [] pds
   in
   let pds =
