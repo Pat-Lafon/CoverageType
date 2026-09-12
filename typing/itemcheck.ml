@@ -77,27 +77,31 @@ let item_check bctx inv_m imp_m (name, rty) =
       (* let () = _die [%here] in *)
       Fai name
 
+(* Check each task independently, returning one [(name, passed)] per task in
+   source order ([true] = type-checked). bctx is threaded through tasks but not returned. *)
 let struc_check bctx items =
   let bctx, imp_m = mk_imp_m bctx items in
   let inv_m = mk_invs items in
   let tasks = mk_tasks items in
-  let _, passed, failed =
+  let _, results =
     List.fold_left
-      (fun (bctx, passed, failed) (name, rty) ->
+      (fun (bctx, results) (name, rty) ->
         match item_check bctx inv_m imp_m (name, rty) with
-        | Suc bctx -> (bctx, passed @ [ name ], failed)
-        | Fai name -> (bctx, passed, failed @ [ name ]))
-      (bctx, [], []) tasks
+        | Suc bctx -> (bctx, results @ [ (name, true) ])
+        | Fai name -> (bctx, results @ [ (name, false) ]))
+      (bctx, []) tasks
   in
   let () =
     TypecheckerLog.result @@ fun _ ->
     Pp.printf "@{<bold>Summary (total %i tasks):@}\n" (List.length tasks)
   in
   let () =
-    match failed with
+    match List.filter (fun (_, ok) -> not ok) results with
     | [] ->
         TypecheckerLog.result @@ fun _ ->
         Pp.printf "@{<bold>@{<yellow>All tasks succeeded@}@}\n"
-    | _ -> TypecheckerLog.result @@ fun _ -> List.iter _task_fail failed
+    | failed ->
+        TypecheckerLog.result @@ fun _ ->
+        List.iter (fun (name, _) -> _task_fail name) failed
   in
-  (Some bctx, passed, failed)
+  results
