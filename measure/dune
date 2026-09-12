@@ -1,0 +1,8 @@
+(library
+ (public_name CoverageType.measure)
+ (name measure)
+ (wrapped true)
+ (libraries ast zutils)
+ (modules measure)
+ (preprocess
+  (pps ppx_here)))
