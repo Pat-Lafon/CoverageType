@@ -35,13 +35,56 @@ let report_unclosed loc query =
           fvs))
     (0 == List.length fvs)
 
+let dump_dir = Sys.getenv_opt "POIROT_SMT_DUMP"
+let dump_count = ref 0
+
+(* [Prover.check_sat] asserts the axioms, the query, then the axioms again, so
+   the answering solver holds each axiom twice. Z3 hash-conses within a context,
+   so an assertion is the axiom whose stored encoding it equals. *)
+let dump_query () =
+  match dump_dir with
+  | None -> ()
+  | Some dir ->
+      let Prover.{ ctx; solver; ax_sys; _ } = Prover.get_prover () in
+      let assertions =
+        List.slow_rm_dup Z3.Expr.equal @@ Z3.Solver.get_assertions solver
+      in
+      let names =
+        List.map
+          (fun e ->
+            List.find_map
+              (fun (name, ax) ->
+                if Z3.Expr.equal e ax.z3_prop then Some name else None)
+              (StrMap.to_kv_list ax_sys))
+          assertions
+      in
+      let unnamed = List.length @@ List.filter Option.is_none names in
+      _assert [%here] (spf "%i assertions are not axioms" unnamed) (1 = unnamed);
+      (* Z3 will not read back the answering solver's [model-add] commands. *)
+      let printable = Z3.Solver.mk_solver ctx None in
+      Z3.Solver.add printable assertions;
+      incr dump_count;
+      let write suffix contents =
+        Core.Out_channel.write_all
+          (spf "%s/q%03i%s" dir !dump_count suffix)
+          ~data:contents
+      in
+      write ".smt2"
+      @@ spf "(set-option :timeout %i)\n%s(check-sat)\n"
+           (get_prover_timeout_bound ())
+           (Z3.Solver.to_string printable);
+      write ".axioms"
+      @@ List.split_by "\n" (function Some n -> n | None -> "(query)") names
+
 let check_valid (task, query) =
   let () =
     _log_debug @@ fun _ ->
     Printf.printf "check valid: %s\n" (layout_prop_ query)
   in
   let () = report_unclosed [%here] query in
-  Prover.check_valid (task, query)
+  let res = Prover.check_valid (task, query) in
+  dump_query ();
+  res
 
 let simplify_sub_typectx ctx (rty1, rty2) =
   let ctx = Typectx.ctx_to_list ctx in
@@ -189,7 +232,9 @@ let non_emptiness_cty rctx cty =
             _log_auxtyping @@ fun _ ->
             Printf.printf "let[@axiom] tmp = %s\n" (layout_prop__raw query)
           in
-          Prover.check_sat (Some rctx.task_name, query))
+          let res = Prover.check_sat (Some rctx.task_name, query) in
+          dump_query ();
+          res)
     in
     let () = Statistic.stat_query_time (rctx.task_name, time) in
     let res =
