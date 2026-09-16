@@ -36,31 +36,27 @@ let report_unclosed loc query =
 let dump_dir = Sys.getenv_opt "POIROT_SMT_DUMP"
 let dump_count = ref 0
 
-(* [Prover.check_sat] asserts the axioms, the query, then the axioms again, so
-   the answering solver holds each axiom twice. Z3 hash-conses within a context,
-   so an assertion is the axiom whose stored encoding it equals. *)
-let dump_query () =
+(* Runs the axiom selection [Prover.check_sat] is about to run, and keeps the
+   names its last step drops. Selecting by name and selecting by proposition
+   fold the same filtered map, so the two lists agree index for index. *)
+let dump_query prop =
   match dump_dir with
   | None -> ()
   | Some dir ->
-      let Prover.{ ctx; solver; ax_sys; _ } = Prover.get_prover () in
-      let assertions =
-        List.slow_rm_dup Z3.Expr.equal @@ Z3.Solver.get_assertions solver
-      in
+      let Prover.{ ctx; ax_sys; _ } = Prover.get_prover () in
       let names =
-        List.map
-          (fun e ->
-            List.find_map
-              (fun (name, ax) ->
-                if Z3.Expr.equal e ax.z3_prop then Some name else None)
-              (StrMap.to_kv_list ax_sys))
-          assertions
+        Prop__.Axiom.(
+          find_axioms_by_preds ax_sys
+          @@ pred_extension (StrSet.of_list @@ get_fv_preds_from_prop prop))
       in
-      let unnamed = List.length @@ List.filter Option.is_none names in
-      _assert [%here] (spf "%i assertions are not axioms" unnamed) (1 = unnamed);
-      (* Z3 will not read back the answering solver's [model-add] commands. *)
-      let printable = Z3.Solver.mk_solver ctx None in
-      Z3.Solver.add printable assertions;
+      let axioms = Prop__.Axiom.find_axioms ax_sys prop in
+      _assert [%here]
+        (spf "%i axioms selected under %i names" (List.length axioms)
+           (List.length names))
+        (List.length axioms = List.length names);
+      let solver = Z3.Solver.mk_solver ctx None in
+      Z3.Solver.add solver
+      @@ List.map (Prover.Propencoding.to_z3 ctx) (axioms @ [ prop ]);
       incr dump_count;
       let write suffix contents =
         Core.Out_channel.write_all
@@ -70,9 +66,8 @@ let dump_query () =
       write ".smt2"
       @@ spf "(set-option :timeout %i)\n%s(check-sat)\n"
            (ZUtilsConfig.get_prover_timeout_bound ())
-           (Z3.Solver.to_string printable);
-      write ".axioms"
-      @@ List.split_by "\n" (function Some n -> n | None -> "(query)") names
+           (Z3.Solver.to_string solver);
+      write ".axioms" @@ List.split_by "\n" Fun.id (names @ [ "(query)" ])
 
 let check_valid query =
   let () =
@@ -80,9 +75,9 @@ let check_valid query =
     Printf.printf "check valid: %s\n" (layout_prop_ query)
   in
   let () = report_unclosed [%here] query in
-  let res = Prover.check_valid query in
-  dump_query ();
-  res
+  (* [Prover.check_valid] refutes the negation. *)
+  dump_query (Not query);
+  Prover.check_valid query
 
 let simplify_sub_typectx ctx (rty1, rty2) =
   let ctx = Typectx.ctx_to_list ctx in
@@ -230,9 +225,8 @@ let non_emptiness_cty rctx cty =
             TypecheckerLog.auxtyping @@ fun _ ->
             Printf.printf "let[@axiom] tmp = %s\n" (layout_prop__raw query)
           in
-          let res = Prover.check_sat query in
-          dump_query ();
-          res)
+          dump_query query;
+          Prover.check_sat query)
     in
     let () = Statistic.stat_query_time (rctx.task_name, time) in
     let res =

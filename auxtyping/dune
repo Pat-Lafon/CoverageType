@@ -6,6 +6,7 @@
   core
   z3
   zutils
+  zutils.prop
   language
   statistic
   CoverageType.typechecker_config)
