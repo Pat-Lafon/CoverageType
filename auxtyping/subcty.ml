@@ -22,6 +22,41 @@ let smart_dependent_exists (x, { nty; phi }) query =
   let phi = subst_prop_instance default_v (AVar x#:nty) phi in
   smart_exists_phi (x#:nty, phi) query
 
+let dump_dir = Sys.getenv_opt "POIROT_SMT_DUMP"
+let dump_count = ref 0
+
+(* Runs the axiom selection [Prover.check_sat] is about to run, labelling each
+   axiom's assert with its name; the goal goes last, unlabelled. *)
+let dump_query prop =
+  match dump_dir with
+  | None -> ()
+  | Some dir ->
+      let Prover.{ ctx; _ } = Prover.get_prover () in
+      let names, axioms = List.split @@ Prover.select_axioms prop in
+      let to_z3 = Propencoding.to_z3 ctx in
+      let axioms = List.map to_z3 axioms and goal = to_z3 prop in
+      (* The solver prints the declarations, then the asserts. *)
+      let solver = Z3.Solver.mk_solver ctx None in
+      Z3.Solver.add solver (axioms @ [ goal ]);
+      let printed = Z3.Solver.to_string solver in
+      let decls =
+        String.sub printed 0
+          (Core.String.substr_index_exn printed ~pattern:"(assert")
+      in
+      let labelled =
+        List.map2
+          (fun name e ->
+            spf "(assert (! %s :named %s))\n" (Z3.Expr.to_string e) name)
+          names axioms
+      in
+      incr dump_count;
+      Core.Out_channel.write_all
+        (spf "%s/q%03i.smt2" dir !dump_count)
+        ~data:
+          (spf "(set-option :timeout %i)\n%s%s(assert %s)\n(check-sat)\n"
+             (ZUtilsConfig.get_prover_timeout_bound ())
+             decls (String.concat "" labelled) (Z3.Expr.to_string goal))
+
 let simplify_sub_typectx ctx (rty1, rty2) =
   let ctx = Typectx.ctx_to_list ctx in
   let rec aux (prefix, rest) (rty1, rty2) =
@@ -116,6 +151,8 @@ let sub_cty ou rctx cty1 cty2 =
           TypecheckerLog.auxtyping @@ fun _ ->
           Printf.printf "let[@valid] tmp = %s\n" (layout_prop_source query)
         in
+        (* [Prover.check_valid] decides the negation, built by [smart_not]. *)
+        dump_query (smart_not query);
         Prover.check_valid_bool [%here] query ~coerce_to:false)
   in
   let () = Statistic.stat_query_time (rctx.task_name, time) in
@@ -162,6 +199,7 @@ let non_emptiness_cty rctx cty =
             TypecheckerLog.auxtyping @@ fun _ ->
             Printf.printf "let[@sat] tmp = %s\n" (layout_prop_source query)
           in
+          dump_query query;
           Prover.check_sat_bool [%here] query ~coerce_to:true)
     in
     let () = Statistic.stat_query_time (rctx.task_name, time) in
