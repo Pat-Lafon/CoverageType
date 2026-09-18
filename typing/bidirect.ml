@@ -79,8 +79,8 @@ let type_check_group (bctx : built_in_ctx) =
               match value_infer_mode with
               | PolyPredParam ->
                   let pred =
-                    (Rename.unique_var "p")#:(Nt.construct_arr_tp
-                                                ([ nty ], Nt.bool_ty))
+                    (Rename.unique "p")#:(Nt.construct_arr_tp
+                                            ([ nty ], Nt.bool_ty))
                   in
                   let open Prop in
                   let phi =
@@ -164,7 +164,7 @@ let type_check_group (bctx : built_in_ctx) =
         (* let () = Printf.printf "fix retty %s\n" (layout_rty retty) in *)
         let arg, retty =
           if String.equal arg fixarg.x then
-            let arg' = Rename.unique_var arg in
+            let arg' = Rename.unique arg in
             (arg', subst_rty_instance arg (AVar arg'#:fixarg.ty) retty)
           else (arg, retty)
         in
