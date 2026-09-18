@@ -137,7 +137,7 @@ let sub_cty ou rctx cty1 cty2 =
         in
         let () =
           TypecheckerLog.auxtyping @@ fun _ ->
-          Printf.printf "let[@axiom] tmp = %s\n" (layout_prop__raw query)
+          Printf.printf "let[@axiom] tmp = %s\n" (layout_prop_source query)
         in
         check_valid query)
   in
@@ -185,7 +185,7 @@ let non_emptiness_cty rctx cty =
           in
           let () =
             TypecheckerLog.auxtyping @@ fun _ ->
-            Printf.printf "let[@axiom] tmp = %s\n" (layout_prop__raw query)
+            Printf.printf "let[@axiom] tmp = %s\n" (layout_prop_source query)
           in
           Prover.check_sat query)
     in
