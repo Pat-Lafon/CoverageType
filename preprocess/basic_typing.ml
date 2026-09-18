@@ -180,8 +180,14 @@ let rec constraint_term_type_infer (ctx : t ctx) (bc : BC.bc) (e : t raw_term) =
               constraint_op_type_infer ctx bc (DtConstructor constructor.x)
             in
             let constructor = constructor.x#:op.ty in
+            (* Two [_] in one pattern (e.g. [Rbtnode (_, l, _, r)]) would
+               duplicate-collide in the ctx; drop wildcards here, keep them in
+               [args] for the arity check below. *)
+            let ctx_args =
+              List.filter (fun a -> not (String.equal a.x "_")) args
+            in
             let bc, exp =
-              constraint_term_type_check (add_to_rights ctx args) bc exp
+              constraint_term_type_check (add_to_rights ctx ctx_args) bc exp
             in
             let constructor_ty =
               Nt.construct_arr_tp (List.map _get_ty args, matched.ty)
@@ -247,7 +253,8 @@ let raw_term_type_check ctx polyvars term =
       in
       res
 
-let constructor_declaration_mk_ (retty, { constr_name; argsty }) =
+let constructor_declaration_mk_ (retty, { constr_name; args }) =
+  let argsty = constructor_args_types args in
   constr_name#:(Nt.close_poly_nt [%here] @@ Nt.construct_arr_tp (argsty, retty))
 
 let item_mk_ctx (e : t item) =
@@ -293,8 +300,8 @@ let item_check (checked : t item list) ctx (e : t item) : t ctx * t item =
       let x = Nt.__force_typed [%here] x in
       let res = MMethodPred x in
       (add_to_right ctx x, res)
-  | MAxiom { name; tasks; prop } ->
-      (ctx, MAxiom { name; tasks; prop = prop_type_check ctx [ "a" ] prop })
+  | MAxiom { name; prop } ->
+      (ctx, MAxiom { name; prop = prop_type_check ctx [ "a" ] prop })
   | MLocalRty { host_name; name; rty; captured } ->
       let host_rty =
         List.filter_map
@@ -348,7 +355,7 @@ let struct_mk_rty_ctx l =
 
 let struct_mk_axiom_ctx l =
   let aux res = function
-    | MAxiom { name; tasks; prop } -> res @ [ (name, tasks, prop) ]
+    | MAxiom { name; prop } -> res @ [ (name, prop) ]
     | _ -> res
   in
   List.fold_left aux [] l
