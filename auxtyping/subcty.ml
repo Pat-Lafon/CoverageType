@@ -1,6 +1,7 @@
 open Language
 open Zutils
 open Prop
+open ZUtilsConfig
 open Zdatatype
 
 let layout_qt = function Nt.Fa -> "∀" | Nt.Ex -> "∃"
@@ -20,8 +21,6 @@ let smart_dependent_forall (x, { nty; phi }) query =
 
 let smart_dependent_exists (x, { nty; phi }) query =
   let phi = subst_prop_instance default_v (AVar x#:nty) phi in
-  (* let query = fresh_name_prop query in *)
-  (* Exists { qv = x#:nty; body = smart_add_to phi query } *)
   smart_exists_phi (x#:nty, phi) query
 
 let report_unclosed loc query =
@@ -33,6 +32,11 @@ let report_unclosed loc query =
           fvs))
     (0 == List.length fvs)
 
+let functional_bodies prop =
+  match get_smt_encoding () with
+  | Both -> Option.to_list (Recdef_z3.build_functional_query prop)
+  | Axiom -> []
+
 let record_nondecisive ~reason ~coerced_to =
   Printf.eprintf
     "[non-decisive Z3 verdict] q%i: timeout/unknown coerced to %s; %s.\n"
@@ -41,11 +45,16 @@ let record_nondecisive ~reason ~coerced_to =
 
 let check_valid query =
   let () =
-    ZUtilsLog.debug @@ fun _ ->
+    ZUtilsLog.queries @@ fun _ ->
     Printf.printf "check valid: %s\n" (layout_prop_ query)
   in
   let () = report_unclosed [%here] query in
-  match Prover.check_sat (smart_not query) with
+  let query = fresh_name_prop query in
+  let axioms = Prover.select_axioms query in
+  let neg = smart_not query in
+  match
+    Prover.check_sat ~axioms ~functional_bodies:(functional_bodies neg) neg
+  with
   | SmtUnsat -> true
   | SmtSat -> false
   | Unknown reason ->
@@ -128,7 +137,8 @@ let sub_cty ou rctx cty1 cty2 =
           prop
     | Under ->
         let rhs = List.fold_right smart_dependent_exists underctx cty1.phi in
-        let prop = smart_implies cty2.phi rhs in
+        let lhs = List.fold_right smart_dependent_exists underctx cty2.phi in
+        let prop = smart_implies lhs rhs in
         List.fold_right smart_dependent_forall
           (overctx @ [ (default_v, mk_top_cty cty2.nty) ])
           prop
@@ -150,7 +160,16 @@ let sub_cty ou rctx cty1 cty2 =
           TypecheckerLog.auxtyping @@ fun _ ->
           Printf.printf "let[@axiom] tmp = %s\n" (layout_prop_source query)
         in
-        check_valid query)
+        let valid = check_valid query in
+        (* [sub_cty] runs on the synthesis enumeration path, where most checks
+           fail by design; gate the dump so it doesn't flood. *)
+        (if not valid then
+           ZUtilsLog.queries @@ fun _ ->
+           Emit.emit_query
+             (TypecheckerConfig.get_emit_backend ())
+             (Prover.select_axioms query)
+             query);
+        valid)
   in
   let () = Statistic.stat_query_time (rctx.task_name, time) in
   (* let () = if not res then _die [%here] in *)
@@ -187,6 +206,10 @@ let non_emptiness_cty rctx cty =
     let query =
       List.fold_right smart_dependent_exists (overctx @ underctx) cty.phi
     in
+    (* Folding independently-named context-entry phis with [cty.phi] can collide
+       bound-var names; freshen the assembled query for [Propencoding.to_z3]'s
+       unique-quantifiers invariant. *)
+    let query = fresh_name_prop query in
     let () = Statistic.stat_query_formula (rctx.task_name, query) in
     let time, res =
       clock (fun () ->
@@ -198,7 +221,9 @@ let non_emptiness_cty rctx cty =
             TypecheckerLog.auxtyping @@ fun _ ->
             Printf.printf "let[@axiom] tmp = %s\n" (layout_prop_source query)
           in
-          Prover.check_sat query)
+          let axioms = Prover.select_axioms query in
+          Prover.check_sat ~axioms ~functional_bodies:(functional_bodies query)
+            query)
     in
     let () = Statistic.stat_query_time (rctx.task_name, time) in
     let res =
