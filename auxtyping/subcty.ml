@@ -46,7 +46,7 @@ let dump_query prop =
       let Prover.{ ctx; ax_sys; _ } = Prover.get_prover () in
       let names =
         Prop__.Axiom.(
-          find_axioms_by_preds ax_sys
+          StrMap.to_key_list @@ find_axioms_by_preds ax_sys
           @@ pred_extension (StrSet.of_list @@ get_fv_preds_from_prop prop))
       in
       let axioms = Prop__.Axiom.find_axioms ax_sys prop in
