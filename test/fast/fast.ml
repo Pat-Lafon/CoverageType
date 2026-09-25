@@ -117,6 +117,14 @@ let%expect_test "elrond/BankersQueue" =
     failing:
   |}]
 
+let%expect_test "emptiness/nonempty_int" =
+  run_emptiness_test "data/emptiness/nonempty_int.ml";
+  [%expect {| nonempty: true |}]
+
+let%expect_test "emptiness/empty_int" =
+  run_emptiness_test "data/emptiness/empty_int.ml";
+  [%expect {| nonempty: false |}]
+
 let%expect_test "quickcheck/SizedHeap" =
   run_test "data/PLDI23/quickcheck/SizedHeap.ml";
   [%expect {|
