@@ -36,6 +36,7 @@ let check_valid (task, query) =
     ZUtilsLog.debug @@ fun _ ->
     Printf.printf "check valid: %s\n" (layout_prop_ query)
   in
+  let query = fresh_name_prop query in
   let () = report_unclosed [%here] query in
   Prover.check_valid (task, query)
 
@@ -115,7 +116,8 @@ let sub_cty ou rctx cty1 cty2 =
           prop
     | Under ->
         let rhs = List.fold_right smart_dependent_exists underctx cty1.phi in
-        let prop = smart_implies cty2.phi rhs in
+        let lhs = List.fold_right smart_dependent_exists underctx cty2.phi in
+        let prop = smart_implies lhs rhs in
         List.fold_right smart_dependent_forall
           (overctx @ [ (default_v, mk_top_cty cty2.nty) ])
           prop

@@ -177,6 +177,13 @@ let type_check_group (bctx : built_in_ctx) =
         (* let () = Printf.printf "fix rty' %s\n" (layout_rty rty') in *)
         let retty = subst_rty_instance arg (AVar fixarg) retty in
         let rctx' = Rctx.add_vars rctx [ fixarg.x#:argrty; fixname.x#:rty' ] in
+        let rctx' =
+          {
+            rctx' with
+            rec_bound =
+              Some (fixname.x, { nty = fixarg.ty; phi = mk_self_wf_dec fixarg });
+          }
+        in
         let* body = term_type_check rctx' body retty in
         Some
           (VFix { fixname = fixname.x#:rty; fixarg = fixarg.x#:argrty; body })#:rty
@@ -296,6 +303,18 @@ let type_check_group (bctx : built_in_ctx) =
                 instantiate_poly_pred_rty rctx.pred_ctx appf.ty apparg'.ty
               in
               let rctx' = Rctx.add_preds rctx poly_preds in
+              (* Termination: a recursive call's argument must decrease. *)
+              let () =
+                match (rctx.rec_bound, appf.x) with
+                | Some (recname, argcty), VVar id when String.equal id.x recname
+                  ->
+                    let rec_arg_rty = RtyBase { ou = Under; cty = argcty } in
+                    if not (subtyping rctx' (rec_arg_rty, apparg_rty)) then (
+                      _warinning_subtyping_error [%here]
+                        (rec_arg_rty, apparg_rty);
+                      raise RecArgCheckFailure)
+                | _ -> ()
+              in
               (* let () = Printf.printf "appf_ty : %s\n" (layout_rty appf_ty) in *)
               let* retty =
                 if is_over_arr_rty appf_ty then
@@ -449,10 +468,23 @@ let type_check_group (bctx : built_in_ctx) =
           (CMatchcase
              { constructor = constructor.x#:constructor_rty; args; exp = exp' })
   in
-  (value_type_check, term_type_check)
+  (value_type_check, term_type_check, value_type_infer, term_type_infer)
+
+(* A recursive call whose argument does not decrease fails the whole function. *)
+let or_rec_arg_failure f = try f () with RecArgCheckFailure -> None
 
 let value_type_check bctx ctx (value, rty) =
-  (fst @@ type_check_group bctx) ctx value rty
+  let f, _, _, _ = type_check_group bctx in
+  or_rec_arg_failure (fun () -> f ctx value rty)
 
 let term_type_check bctx ctx (value, rty) =
-  (snd @@ type_check_group bctx) ctx value rty
+  let _, f, _, _ = type_check_group bctx in
+  or_rec_arg_failure (fun () -> f ctx value rty)
+
+let value_type_infer bctx ctx v =
+  let _, _, f, _ = type_check_group bctx in
+  or_rec_arg_failure (fun () -> f ctx v)
+
+let term_type_infer bctx ctx e =
+  let _, _, _, f = type_check_group bctx in
+  or_rec_arg_failure (fun () -> f ctx e)
