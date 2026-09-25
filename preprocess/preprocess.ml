@@ -28,6 +28,21 @@ let load_ctxs () =
       let axioms = struct_mk_axiom_ctx items in
       let bctx = { builtin_ctx; cur_axiom_names = [] } in
       let bctx = axiom_add_to_rights bctx axioms in
+      (* After type checking, so the measure bodies carry types. *)
+      let () = Measure.register_items items in
+      let () =
+        match ZUtilsConfig.get_smt_encoding () with
+        | ZUtilsConfig.Both
+          when not
+                 (List.exists
+                    (function
+                      | MFuncImpRaw { if_rec = true; _ } -> true | _ -> false)
+                    items) ->
+            _failatwith [%here]
+              "zutils.smt_encoding [\"Both\"] requires at least one recursive \
+               measure in the typing context"
+        | ZUtilsConfig.Axiom | ZUtilsConfig.Both -> ()
+      in
       let res = (alias, basic_ctx, bctx) in
       _ctxs := Some res;
       res
