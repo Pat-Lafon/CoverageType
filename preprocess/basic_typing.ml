@@ -247,7 +247,8 @@ let raw_term_type_check ctx polyvars term =
       in
       res
 
-let constructor_declaration_mk_ (retty, { constr_name; argsty }) =
+let constructor_declaration_mk_ (retty, { constr_name; args }) =
+  let argsty = constructor_args_types args in
   constr_name#:(Nt.close_poly_nt [%here] @@ Nt.construct_arr_tp (argsty, retty))
 
 let item_mk_ctx (e : t item) =
@@ -293,8 +294,8 @@ let item_check (checked : t item list) ctx (e : t item) : t ctx * t item =
       let x = Nt.__force_typed [%here] x in
       let res = MMethodPred x in
       (add_to_right ctx x, res)
-  | MAxiom { name; tasks; prop } ->
-      (ctx, MAxiom { name; tasks; prop = prop_type_check ctx [ "a" ] prop })
+  | MAxiom { name; prop } ->
+      (ctx, MAxiom { name; prop = prop_type_check ctx [ "a" ] prop })
   | MLocalRty { host_name; name; rty; captured } ->
       let host_rty =
         List.filter_map
@@ -348,7 +349,7 @@ let struct_mk_rty_ctx l =
 
 let struct_mk_axiom_ctx l =
   let aux res = function
-    | MAxiom { name; tasks; prop } -> res @ [ (name, tasks, prop) ]
+    | MAxiom { name; prop } -> res @ [ (name, prop) ]
     | _ -> res
   in
   List.fold_left aux [] l
