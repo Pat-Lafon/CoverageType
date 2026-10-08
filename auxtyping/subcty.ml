@@ -36,27 +36,17 @@ let report_unclosed loc query =
 let dump_dir = Sys.getenv_opt "POIROT_SMT_DUMP"
 let dump_count = ref 0
 
-(* Runs the axiom selection [Prover.check_sat] is about to run, and keeps the
-   names its last step drops. Selecting by name and selecting by proposition
-   fold the same filtered map, so the two lists agree index for index. *)
+(* Runs the axiom selection [Prover.check_sat] is about to run, keeping each
+   axiom's name for the sidecar. *)
 let dump_query prop =
   match dump_dir with
   | None -> ()
   | Some dir ->
-      let Prover.{ ctx; ax_sys; _ } = Prover.get_prover () in
-      let names =
-        Prop__.Axiom.(
-          StrMap.to_key_list @@ find_axioms_by_preds ax_sys
-          @@ pred_extension (StrSet.of_list @@ get_fv_preds_from_prop prop))
-      in
-      let axioms = Prop__.Axiom.find_axioms ax_sys prop in
-      _assert [%here]
-        (spf "%i axioms selected under %i names" (List.length axioms)
-           (List.length names))
-        (List.length axioms = List.length names);
+      let Prover.{ ctx; _ } = Prover.get_prover () in
+      let names, axioms = List.split @@ Prover.select_axioms prop in
       let solver = Z3.Solver.mk_solver ctx None in
       Z3.Solver.add solver
-      @@ List.map (Prover.Propencoding.to_z3 ctx) (axioms @ [ prop ]);
+      @@ List.map (Prop__.Propencoding.to_z3 ctx) (axioms @ [ prop ]);
       incr dump_count;
       let write suffix contents =
         Core.Out_channel.write_all
@@ -69,15 +59,26 @@ let dump_query prop =
            (Z3.Solver.to_string solver);
       write ".axioms" @@ List.split_by "\n" Fun.id (names @ [ "(query)" ])
 
+let record_nondecisive ~reason ~coerced_to =
+  Printf.eprintf
+    "[non-decisive Z3 verdict] q%i: timeout/unknown coerced to %s; %s.\n"
+    !Prover.query_counter coerced_to
+    (Prover.coercion_hint reason)
+
 let check_valid query =
   let () =
     ZUtilsLog.debug @@ fun _ ->
     Printf.printf "check valid: %s\n" (layout_prop_ query)
   in
   let () = report_unclosed [%here] query in
-  (* [Prover.check_valid] refutes the negation. *)
+  (* Valid when its negation is unsat. *)
   dump_query (Not query);
-  Prover.check_valid query
+  match Prover.check_sat (Not query) with
+  | SmtUnsat -> true
+  | SmtSat -> false
+  | Unknown reason ->
+      record_nondecisive ~reason ~coerced_to:"invalid";
+      false
 
 let simplify_sub_typectx ctx (rty1, rty2) =
   let ctx = Typectx.ctx_to_list ctx in
@@ -175,7 +176,7 @@ let sub_cty ou rctx cty1 cty2 =
         in
         let () =
           TypecheckerLog.auxtyping @@ fun _ ->
-          Printf.printf "let[@axiom] tmp = %s\n" (layout_prop__raw query)
+          Printf.printf "let[@axiom] tmp = %s\n" (layout_prop_source query)
         in
         check_valid query)
   in
@@ -223,15 +224,19 @@ let non_emptiness_cty rctx cty =
           in
           let () =
             TypecheckerLog.auxtyping @@ fun _ ->
-            Printf.printf "let[@axiom] tmp = %s\n" (layout_prop__raw query)
+            Printf.printf "let[@axiom] tmp = %s\n" (layout_prop_source query)
           in
           dump_query query;
           Prover.check_sat query)
     in
     let () = Statistic.stat_query_time (rctx.task_name, time) in
     let res =
-      match res with SmtUnsat -> false | SmtSat _ -> true | Timeout -> true
-      (* NOTE: we cannot decide if this control flow is unreachable, thus continue *)
+      match res with
+      | SmtUnsat -> false
+      | SmtSat -> true
+      | Unknown reason ->
+          record_nondecisive ~reason ~coerced_to:"inhabited";
+          true
     in
     (* let () = if List.length underctx > 1 then _die [%here] in *)
     (* let () = if not res then _die [%here] in *)
