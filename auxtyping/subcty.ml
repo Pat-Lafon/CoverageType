@@ -1,6 +1,7 @@
 open Language
 open Zutils
 open Prop
+open ZUtilsConfig
 open Zdatatype
 
 let layout_qt = function Nt.Fa -> "∀" | Nt.Ex -> "∃"
@@ -21,6 +22,11 @@ let smart_dependent_forall (x, { nty; phi }) query =
 let smart_dependent_exists (x, { nty; phi }) query =
   let phi = subst_prop_instance default_v (AVar x#:nty) phi in
   smart_exists_phi (x#:nty, phi) query
+
+let functional_bodies prop =
+  match get_smt_encoding () with
+  | Both -> Option.to_list (Recdef_z3.build_functional_query prop)
+  | Axiom -> []
 
 let simplify_sub_typectx ctx (rty1, rty2) =
   let ctx = Typectx.ctx_to_list ctx in
@@ -116,8 +122,16 @@ let sub_cty ou rctx cty1 cty2 =
           TypecheckerLog.auxtyping @@ fun _ ->
           Printf.printf "let[@valid] tmp = %s\n" (layout_prop_source query)
         in
-        Prover.check_valid_bool [%here] query ~coerce_to:false
-          ~coerce_desc:"invalid")
+        let valid =
+          Prover.check_valid_bool [%here] ~functional_bodies query
+            ~coerce_to:false
+        in
+        (* [sub_cty] runs on the synthesis enumeration path, where most checks
+           fail by design; gate the dump so it doesn't flood. *)
+        (if not valid then
+           ZUtilsLog.queries @@ fun _ ->
+           Emit.emit_query (Prover.select_axioms query) query);
+        valid)
   in
   let () = Statistic.stat_query_time (rctx.task_name, time) in
   res
@@ -163,8 +177,7 @@ let non_emptiness_cty rctx cty =
             TypecheckerLog.auxtyping @@ fun _ ->
             Printf.printf "let[@valid] tmp = %s\n" (layout_prop_source query)
           in
-          Prover.check_sat_bool [%here] query ~coerce_to:true
-            ~coerce_desc:"inhabited")
+          Prover.check_sat_bool [%here] ~functional_bodies query ~coerce_to:true)
     in
     let () = Statistic.stat_query_time (rctx.task_name, time) in
     res
