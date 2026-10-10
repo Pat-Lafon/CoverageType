@@ -96,7 +96,8 @@ let sub_cty ou rctx cty1 cty2 =
         List.fold_right smart_dependent_forall overctx_with_v prop
     | Under ->
         let rhs = List.fold_right smart_dependent_exists underctx cty1.phi in
-        let prop = smart_implies cty2.phi rhs in
+        let lhs = List.fold_right smart_dependent_exists underctx cty2.phi in
+        let prop = smart_implies lhs rhs in
         List.fold_right smart_dependent_forall overctx_with_v prop
   in
   let () = Statistic.stat_query_formula (rctx.task_name, query) in
@@ -116,8 +117,7 @@ let sub_cty ou rctx cty1 cty2 =
           TypecheckerLog.auxtyping @@ fun _ ->
           Printf.printf "let[@valid] tmp = %s\n" (layout_prop_source query)
         in
-        Prover.check_valid_bool [%here] query ~coerce_to:false
-          ~coerce_desc:"invalid")
+        Prover.check_valid_bool [%here] query ~coerce_to:false)
   in
   let () = Statistic.stat_query_time (rctx.task_name, time) in
   res
@@ -163,8 +163,7 @@ let non_emptiness_cty rctx cty =
             TypecheckerLog.auxtyping @@ fun _ ->
             Printf.printf "let[@valid] tmp = %s\n" (layout_prop_source query)
           in
-          Prover.check_sat_bool [%here] query ~coerce_to:true
-            ~coerce_desc:"inhabited")
+          Prover.check_sat_bool [%here] query ~coerce_to:true)
     in
     let () = Statistic.stat_query_time (rctx.task_name, time) in
     res
