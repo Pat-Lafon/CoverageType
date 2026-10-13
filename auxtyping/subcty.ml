@@ -96,7 +96,8 @@ let sub_cty ou rctx cty1 cty2 =
         List.fold_right smart_dependent_forall overctx_with_v prop
     | Under ->
         let rhs = List.fold_right smart_dependent_exists underctx cty1.phi in
-        let prop = smart_implies cty2.phi rhs in
+        let lhs = List.fold_right smart_dependent_exists underctx cty2.phi in
+        let prop = smart_implies lhs rhs in
         List.fold_right smart_dependent_forall overctx_with_v prop
   in
   let () = Statistic.stat_query_formula (rctx.task_name, query) in
