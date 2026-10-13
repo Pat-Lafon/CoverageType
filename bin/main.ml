@@ -32,6 +32,16 @@ let subtype_check source_file () =
   Pp.printf "@{<bold>Result: %b@}\n" res;
   Stdlib.exit (if res then 0 else 1)
 
+let nonempty_check source_file () =
+  let code = Preprocess.preprocess [ source_file ] in
+  let _, rty = get_rty_by_name code "rty" in
+  let _ = Preprocess.load_bctx () in
+  let () = Statistic.create_subtyping_stat () in
+  let rctx = Typing.Rctx.emp "subtyping" [] [] in
+  let res = Auxtyping.non_emptiness_spec rctx rty in
+  Pp.printf "@{<bold>Result: %b@}\n" res;
+  Stdlib.exit (if res then 0 else 1)
+
 let type_check source_file () =
   let code = Preprocess.preprocess [ source_file ] in
   let () = Pp.printf "@{<bold>result:@} %s\n" (layout_structure code) in
@@ -61,6 +71,7 @@ let commands =
     [
       one_param_file "print-source-code" print_source_code;
       one_param_file "subtype-check" subtype_check;
+      one_param_file "nonempty-check" nonempty_check;
       one_param_file "type-check" type_check;
     ]
 
