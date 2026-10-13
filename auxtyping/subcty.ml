@@ -36,28 +36,37 @@ let report_unclosed loc query =
 let dump_dir = Sys.getenv_opt "POIROT_SMT_DUMP"
 let dump_count = ref 0
 
-(* Runs the axiom selection [Prover.check_sat] is about to run, keeping each
-   axiom's name for the sidecar. *)
+(* Runs the axiom selection [Prover.check_sat] is about to run, labelling each
+   axiom's assert with its name; the goal goes last, unlabelled. *)
 let dump_query prop =
   match dump_dir with
   | None -> ()
   | Some dir ->
       let Prover.{ ctx; _ } = Prover.get_prover () in
       let names, axioms = List.split @@ Prover.select_axioms prop in
+      let to_z3 = Prop__.Propencoding.to_z3 ctx in
+      let axioms = List.map to_z3 axioms and goal = to_z3 prop in
+      (* The solver prints the declarations, then the asserts. *)
       let solver = Z3.Solver.mk_solver ctx None in
-      Z3.Solver.add solver
-      @@ List.map (Prop__.Propencoding.to_z3 ctx) (axioms @ [ prop ]);
-      incr dump_count;
-      let write suffix contents =
-        Core.Out_channel.write_all
-          (spf "%s/q%03i%s" dir !dump_count suffix)
-          ~data:contents
+      Z3.Solver.add solver (axioms @ [ goal ]);
+      let printed = Z3.Solver.to_string solver in
+      let decls =
+        String.sub printed 0
+          (Core.String.substr_index_exn printed ~pattern:"(assert")
       in
-      write ".smt2"
-      @@ spf "(set-option :timeout %i)\n%s(check-sat)\n"
-           (ZUtilsConfig.get_prover_timeout_bound ())
-           (Z3.Solver.to_string solver);
-      write ".axioms" @@ List.split_by "\n" Fun.id (names @ [ "(query)" ])
+      let labelled =
+        List.map2
+          (fun name e ->
+            spf "(assert (! %s :named %s))\n" (Z3.Expr.to_string e) name)
+          names axioms
+      in
+      incr dump_count;
+      Core.Out_channel.write_all
+        (spf "%s/q%03i.smt2" dir !dump_count)
+        ~data:
+          (spf "(set-option :timeout %i)\n%s%s(assert %s)\n(check-sat)\n"
+             (ZUtilsConfig.get_prover_timeout_bound ())
+             decls (String.concat "" labelled) (Z3.Expr.to_string goal))
 
 let record_nondecisive ~reason ~coerced_to =
   Printf.eprintf
