@@ -56,12 +56,41 @@ let one_param_file message f =
   in
   (message, cmd)
 
+(* [load_bctx] registers every axiom into the prover, which [all_axioms] reads
+   back. *)
+let export_axioms backend oc =
+  let _ = Preprocess.load_bctx () in
+  Auxtyping.Emit.(emit_axiom_preamble (pieces backend))
+    oc
+    (Prop.Prover.all_axioms ())
+
+let config_only message f =
+  let cmd =
+    Command.basic ~summary:message
+      Command.Let_syntax.(
+        let%map_open config_file =
+          flag "config"
+            (optional_with_default "meta-config.json" regular_file)
+            ~doc:"config file path"
+        and output_file =
+          flag "output" (required string)
+            ~doc:"file path for the rendered axioms"
+        in
+        fun () ->
+          let root = Yojson.Safe.from_file config_file in
+          TypecheckerConfig.bootstrap root;
+          Out_channel.with_file output_file ~f)
+  in
+  (message, cmd)
+
 let commands =
   Command.group ~summary:"Poirot"
     [
       one_param_file "print-source-code" print_source_code;
       one_param_file "subtype-check" subtype_check;
       one_param_file "type-check" type_check;
+      config_only "export-axioms-lean" (export_axioms `Lean);
+      config_only "export-axioms-coq" (export_axioms `Coq);
     ]
 
 let () = Command_unix.run commands
