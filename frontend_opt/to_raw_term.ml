@@ -50,6 +50,8 @@ and raw_term_to_expr (expr : Nt.t raw_term) =
       let vb = mk_vb (typed_ids_to_pattern lhs, typed_raw_term_to_expr rhs) in
       desc_to_ocamlexpr
       @@ Pexp_let (flag, [ vb ], typed_raw_term_to_expr letbody)
+  | AppOp ({ x = DtConstructor c; _ }, args) ->
+      mk_construct (c, List.map typed_raw_term_to_expr args)
   | AppOp (op, args) ->
       (* NOTE: to make the printed code looks clearer, we don't print type of operators. *)
       mk_op_apply (mkvar (layout_op op.x), List.map typed_raw_term_to_expr args)
@@ -236,15 +238,10 @@ let typed_raw_term_of_expr ?(record_fields = []) expr =
     | Pexp_apply (func, args) ->
         let args = List.map (fun x -> aux @@ snd x) args in
         let func = aux func in
-        let res =
-          match func.x with
-          | Var f -> (
-              match string_to_op_opt (normalize_eq_op f.x) with
-              | Some op -> AppOp (op#:f.ty, args)
-              | None -> App (func, args))
-          | _ -> App (func, args)
-        in
-        res#:Nt.Ty_unknown
+        (match func.x with
+        | Var f when is_builtin_op (normalize_eq_op f.x) ->
+            AppOp ((PrimOp (normalize_eq_op f.x))#:f.ty, args)
+        | _ -> App (func, args))#:Nt.Ty_unknown
     | Pexp_ifthenelse (e1, e2, Some e3) ->
         (Ifte (aux e1, aux e2, aux e3))#:Nt.Ty_unknown
     | Pexp_ifthenelse (e1, e2, None) ->
