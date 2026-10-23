@@ -1,6 +1,7 @@
 open Language
 open Zutils
 open Prop
+open ZUtilsConfig
 open Zdatatype
 
 let layout_qt = function Nt.Fa -> "∀" | Nt.Ex -> "∃"
@@ -21,6 +22,11 @@ let smart_dependent_forall (x, { nty; phi }) query =
 let smart_dependent_exists (x, { nty; phi }) query =
   let phi = subst_prop_instance default_v (AVar x#:nty) phi in
   smart_exists_phi (x#:nty, phi) query
+
+let functional_bodies prop =
+  match get_smt_encoding () with
+  | Both -> [ Measure.build_functional_query prop ]
+  | Axiom -> []
 
 let simplify_sub_typectx ctx (rty1, rty2) =
   let ctx = Typectx.ctx_to_list ctx in
@@ -116,7 +122,8 @@ let sub_cty ou rctx cty1 cty2 =
           TypecheckerLog.auxtyping @@ fun _ ->
           Printf.printf "let[@valid] tmp = %s\n" (layout_prop_source query)
         in
-        Prover.check_valid_bool [%here] query ~coerce_to:false)
+        Prover.check_valid_bool [%here] ~functional_bodies query
+          ~coerce_to:false)
   in
   let () = Statistic.stat_query_time (rctx.task_name, time) in
   res
@@ -162,7 +169,7 @@ let non_emptiness_cty rctx cty =
             TypecheckerLog.auxtyping @@ fun _ ->
             Printf.printf "let[@sat] tmp = %s\n" (layout_prop_source query)
           in
-          Prover.check_sat_bool [%here] query ~coerce_to:true)
+          Prover.check_sat_bool [%here] ~functional_bodies query ~coerce_to:true)
     in
     let () = Statistic.stat_query_time (rctx.task_name, time) in
     res
