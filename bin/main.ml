@@ -56,12 +56,44 @@ let one_param_file message f =
   in
   (message, cmd)
 
+let export_measures_smt oc =
+  ignore (Preprocess.load_bctx ());
+  Out_channel.output_string oc (Measure.render_smtlib ())
+
+(* A consumer reads the last assert as the negated goal, so the trailing
+   [false] makes the goal [true] and leaves every axiom an axiom. *)
+let export_axioms_smt oc =
+  ignore (Preprocess.load_bctx ());
+  Out_channel.output_string oc (Prop.Prover.serialize_all_axioms ());
+  Out_channel.output_string oc "(assert false)\n"
+
+let config_only message f =
+  let cmd =
+    Command.basic ~summary:message
+      Command.Let_syntax.(
+        let%map_open config_file =
+          flag "config"
+            (optional_with_default "meta-config.json" regular_file)
+            ~doc:"config file path"
+        and output_file =
+          flag "output" (required string)
+            ~doc:"file path for the rendered output"
+        in
+        fun () ->
+          let root = Yojson.Safe.from_file config_file in
+          TypecheckerConfig.bootstrap root;
+          Out_channel.with_file output_file ~f)
+  in
+  (message, cmd)
+
 let commands =
   Command.group ~summary:"Poirot"
     [
       one_param_file "print-source-code" print_source_code;
       one_param_file "subtype-check" subtype_check;
       one_param_file "type-check" type_check;
+      config_only "export-measures-smt" export_measures_smt;
+      config_only "export-axioms-smt" export_axioms_smt;
     ]
 
 let () = Command_unix.run commands
