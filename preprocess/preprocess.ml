@@ -24,6 +24,53 @@ let builtin_rty_ctx =
 
 let _ctxs = ref None
 
+(* Positional constructors stay uninterpreted: axioms name fields by record label. *)
+let register_datatypes items =
+  let open Prop.Z3decls in
+  let ctor_of_decl { constr_name; args } =
+    let cname = Measure.z3_ctor_name constr_name in
+    match args with
+    | CtorTuple [] -> Some { cname; fields = [] }
+    | CtorRecord xs ->
+        Some
+          {
+            cname;
+            fields = List.map (fun x -> { fname = x.x; ftype = x.ty }) xs;
+          }
+    | CtorTuple _ -> None
+  in
+  let dt_decl_of_item = function
+    | MTyDecl
+        { type_name; type_params = []; type_decl = Decl_constructors decls }
+      when Nt.(is_uninterp (to_smtty (Ty_constructor (type_name, [])))) ->
+        let ctors = List.filter_map ctor_of_decl decls in
+        if List.compare_lengths ctors decls = 0 then
+          Some { dt_name = type_name; ctors }
+        else (
+          TypecheckerLog.preprocess (fun () ->
+              Printf.printf
+                "`%s` has a positional constructor; keeping its sort \
+                 uninterpreted\n"
+                type_name);
+          None)
+    | _ -> None
+  in
+  let val_decl name args ret =
+    MValDecl name#:(Nt.construct_arr_tp (args, ret))
+  in
+  let method_preds d =
+    let dt_ty = Nt.Ty_constructor (d.dt_name, []) in
+    List.concat_map
+      (fun c ->
+        val_decl c.cname (List.map (fun f -> f.ftype) c.fields) dt_ty
+        :: val_decl (recognizer_name c.cname) [ dt_ty ] Nt.bool_ty
+        :: List.map (fun f -> val_decl f.fname [ dt_ty ] f.ftype) c.fields)
+      d.ctors
+  in
+  let decls = List.filter_map dt_decl_of_item items in
+  List.iter register_decl decls;
+  List.concat_map method_preds decls
+
 let resolve_files (prim_path : TypecheckerConfig.prim_path) : string list =
   Option.to_list prim_path.data_type_decls
   @ [ prim_path.normal_typing; prim_path.coverage_typing; prim_path.axioms ]
@@ -82,6 +129,7 @@ let load_ctxs () =
       let prim_path = (TypecheckerConfig.get ()).prim_path in
       let files = resolve_files prim_path in
       let items = multi_parse files in
+      let items = register_datatypes items @ items in
       let alias = Type_alias.item_mk_type_alias_ctx items in
       let items = Type_alias.item_inline alias items in
       let basic_ctx, items = struct_check_program items in
